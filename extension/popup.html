@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 300px; margin: 0; padding: 14px; background: #141414; color: #eaeaea;
+         font: 13px/1.6 system-ui, "Microsoft YaHei", sans-serif; }
+  h1 { font-size: 15px; margin: 0 0 10px; }
+  label { display: block; font-size: 12px; color: #9a9a9a; margin: 10px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px;
+          border: 1px solid #333; background: #1e1e1e; color: #eee; }
+  button { width: 100%; margin-top: 8px; padding: 7px; border: 0; border-radius: 6px;
+           background: #ff2442; color: #fff; cursor: pointer; font-size: 13px; }
+  button.secondary { background: #2a2a2a; color: #ddd; }
+  .row { display: flex; gap: 8px; }
+  .row button { flex: 1; }
+  #status { margin-top: 10px; font-size: 12px; color: #9a9a9a; }
+  .ok { color: #6ee7a8; }
+  .bad { color: #ff7b7b; }
+</style>
+</head>
+<body>
+  <h1>xhs-ops bridge</h1>
+  <div id="status">检查服务中…</div>
+
+  <label>本地服务地址</label>
+  <input id="endpoint" placeholder="http://127.0.0.1:8787">
+
+  <label>token（启动服务时终端里会打印）</label>
+  <input id="token" placeholder="粘贴 token">
+
+  <div class="row">
+    <button id="save" class="secondary">保存</button>
+    <button id="test">测试发送</button>
+  </div>
+  <button id="open">打开本地页面</button>
+
+  <div id="counts"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

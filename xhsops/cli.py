@@ -332,6 +332,19 @@ def _parse_json(text: str) -> Optional[dict]:
         return None
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from .web.app import get_token
+
+    token = get_token()
+    print(f"本地服务：http://127.0.0.1:{args.port}")
+    print(f"插件 token：{token}")
+    print("把 token 填进插件弹窗，然后打开小红书页面。Ctrl+C 停止。")
+    uvicorn.run("xhsops.web.app:app", host="127.0.0.1", port=args.port, log_level="warning")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     conn = store.connect()
     data = store.stats(conn)
@@ -397,6 +410,10 @@ def build_parser() -> argparse.ArgumentParser:
     brief = sub.add_parser("brief", help="生成日报（Markdown + JSON）")
     brief.add_argument("--days", type=int, default=7, help="统计窗口，默认 7 天")
     brief.set_defaults(func=cmd_brief)
+
+    serve = sub.add_parser("serve", help="启动本地桥接服务，给浏览器插件用")
+    serve.add_argument("--port", type=int, default=8787)
+    serve.set_defaults(func=cmd_serve)
 
     # 让 --json 在子命令前后都能用：子命令里用 SUPPRESS，避免覆盖顶层已经解析出的值。
     for subparser in (doctor, collect, enrich, batch, status, brief):
