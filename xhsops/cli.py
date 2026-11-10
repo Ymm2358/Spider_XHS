@@ -391,6 +391,22 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_login(args: argparse.Namespace) -> int:
+    from .login import qr_login, save_cookie
+
+    print("请用小红书 App 扫码，并在手机上确认。")
+    try:
+        cookie = qr_login()
+    except Exception as exc:
+        print(f"登录失败：{exc}")
+        return 1
+
+    path = save_cookie(cookie)
+    print(f"已写入 {path}（Cookie 长度 {len(cookie)}）")
+    print("下一步：python -m xhsops doctor")
+    return 0
+
+
 def cmd_replay(args: argparse.Namespace) -> int:
     """把插件归档的原始响应重新解析入库。改了 parser 之后用它回填。"""
     from .config import DATA_DIR
@@ -505,8 +521,11 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--limit", type=int, default=0, help="只处理最近 N 个文件")
     replay.set_defaults(func=cmd_replay)
 
+    login = sub.add_parser("login", help="扫码登录并把 Cookie 写回 .env")
+    login.set_defaults(func=cmd_login)
+
     # 让 --json 在子命令前后都能用：子命令里用 SUPPRESS，避免覆盖顶层已经解析出的值。
-    for subparser in (doctor, collect, enrich, batch, status, brief, serve, export_cmd, replay):
+    for subparser in (doctor, collect, enrich, batch, status, brief, serve, export_cmd, replay, login):
         subparser.add_argument(
             "--json", action="store_true", default=argparse.SUPPRESS, help="输出 JSON，供 agent 解析"
         )

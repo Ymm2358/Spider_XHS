@@ -32,6 +32,9 @@ copy .env.example .env
 ## 日常使用
 
 ```
+# Cookie 失效时重新扫码，自动写回 .env
+.venv\Scripts\python -m xhsops login
+
 # 启动本地服务，插件的数据往这里送
 .venv\Scripts\python -m xhsops serve
 
