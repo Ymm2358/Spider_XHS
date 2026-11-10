@@ -12,7 +12,7 @@
 | P1 | 采集与入库：搜索三档、SQLite、快照、原始 JSON 归档、批处理超时隔离 | 完成 |
 | P2 | 指标与日报：加权互动、log 空间稳健 z、蓝海指数、方向对比、brief.json | 完成初版 |
 | P3 | Agent 接入：xhs-ops skill、xhs-analyst agent、`/daily` 出 advice.md | 完成 |
-| P4 | 自动化：run_daily.ps1、sync_upstream.ps1、Windows 计划任务、上游同步 PR | 脚本已写，计划任务未配 |
+| P4 | 自动化：run_daily.ps1、sync_upstream.ps1、Windows 计划任务、上游同步 PR | 脚本已验证，计划任务待提权注册 |
 | P5 | 成稿闭环：选候选 → dsh 写标题正文 → 人工发布 | 未开始 |
 | P6 | 静态看板：`xhsops report --html`，单文件可离线看 | 未开始 |
 | P7 | 自动发布（可选，默认关闭） | 未开始 |

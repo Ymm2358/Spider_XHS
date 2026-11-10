@@ -1,19 +1,19 @@
 # 每日采集 + 日报
-
-每天定时跑这一条即可。任何一个关键词卡住都不会拖垮整轮：
-batch 会按关键词起子进程，超时连同子进程树一起结束。
-
-用法：
-  powershell -ExecutionPolicy Bypass -File scripts\run_daily.ps1
-  powershell -ExecutionPolicy Bypass -File scripts\run_daily.ps1 -SkipCollect
-
-参数：
-  -SkipCollect  只重算日报，不重新采集（调指标时用）
-  -Timeout      单个关键词的超时秒数，默认 120
-  -Direction    只跑某个方向，默认 all
-
-日志写到 logs\daily-YYYY-MM-DD.log，失败也会留下记录。
-注意：不要给小红书挂代理。XHS_PROXY 留空。
+#
+# 每天定时跑这一条即可。任何一个关键词卡住都不会拖垮整轮：
+# batch 会按关键词起子进程，超时连同子进程树一起结束。
+#
+# 用法：
+#   powershell -ExecutionPolicy Bypass -File scripts\run_daily.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\run_daily.ps1 -SkipCollect
+#
+# 参数：
+#   -SkipCollect  只重算日报，不重新采集（调指标时用）
+#   -Timeout      单个关键词的超时秒数，默认 120
+#   -Direction    只跑某个方向，默认 all
+#
+# 日志写到 logs\daily-YYYY-MM-DD.log，失败也会留下记录。
+# 注意：不要给小红书挂代理。XHS_PROXY 留空。
 
 param(
     [switch]$SkipCollect,
