@@ -55,3 +55,13 @@ def unwrap(result: Any) -> Any:
     if not success:
         raise UpstreamError(str(message or "上游返回 success=False"))
     return data
+
+
+def disable_risk_verify(api) -> None:
+    """批量任务里不弹二维码。
+
+    上游遇到 461/471 会调 risk_qr_verify，默认行为是打印二维码并轮询 180 秒。
+    批量补作者时这会让整轮卡死，而且验证通过的收益很低，所以默认直接返回 False，
+    让调用方立刻拿到失败结果。需要扫码时用 enrich --verify。
+    """
+    api.risk_qr_verify = lambda *args, **kwargs: False

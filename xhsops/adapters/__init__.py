@@ -3,6 +3,7 @@ from .xhs_runtime import (
     build_creator_api,
     build_pc_api,
     build_pc_auth,
+    disable_risk_verify,
     unwrap,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "build_creator_api",
     "build_pc_api",
     "build_pc_auth",
+    "disable_risk_verify",
     "unwrap",
 ]

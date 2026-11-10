@@ -207,7 +207,7 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     from .enrich import enrich
 
     conn = store.connect()
-    result = enrich(conn, limit=args.limit)
+    result = enrich(conn, limit=args.limit, allow_verify=args.verify)
     result["ok"] = True
     _emit(result, args.json)
     return 0
@@ -379,6 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     enrich = sub.add_parser("enrich", help="补全作者粉丝数")
     enrich.add_argument("--limit", type=int, default=60, help="本次最多补多少个作者")
+    enrich.add_argument("--verify", action="store_true", help="触发风控时扫码验证；默认跳过，避免卡 180 秒")
     enrich.set_defaults(func=cmd_enrich)
 
     batch = sub.add_parser("batch", help="逐关键词采集，单个超时不影响整体")

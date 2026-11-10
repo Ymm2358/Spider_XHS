@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 
-from .adapters import build_pc_api
+from .adapters import build_pc_api, disable_risk_verify
 from .normalize import parse_count
 
 
@@ -28,9 +28,12 @@ def fetch_author(api, author_id: str) -> dict | None:
     }
 
 
-def enrich(conn, api=None, limit: int = 60, delay: tuple[float, float] = (1.5, 3.0)) -> dict:
+def enrich(conn, api=None, limit: int = 60, delay: tuple[float, float] = (1.5, 3.0), allow_verify: bool = False) -> dict:
     """给还没粉丝数的作者补数据，优先补互动量高的笔记作者。"""
     api = api or build_pc_api()
+    if not allow_verify:
+        disable_risk_verify(api)
+
     rows = conn.execute(
         """
         SELECT author_id, MAX(liked + 3 * collected + 4 * comment) AS heat
