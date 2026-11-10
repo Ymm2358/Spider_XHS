@@ -1,6 +1,9 @@
 // 运行在页面主世界（MAIN world），只复制白名单接口的响应。
 // 限流 + 去重 + 最小体积过滤，避免在消息页这类高频页面上拖慢页面。
 (() => {
+  // 只在小红书域名下工作。即使浏览器忽略了 manifest 的 matches，也不会碰别的网站。
+  if (!/(^|\.)xiaohongshu\.com$/i.test(location.hostname)) return;
+
   const MAX_BYTES = 120000;
   const MIN_BYTES = 200;
   const DEDUPE_MS = 3000;

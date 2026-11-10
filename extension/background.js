@@ -83,6 +83,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== "ingest") return;
 
   (async () => {
+    const page = String(message.page || (sender.tab && sender.tab.url) || "");
+    if (!/^https:\/\/([a-z0-9-]+\.)*xiaohongshu\.com\//i.test(page)) {
+      sendResponse({ ok: true, skipped: "not xiaohongshu" });
+      return;
+    }
     const { paused } = await config();
     if (paused) {
       sendResponse({ ok: true, paused: true });
