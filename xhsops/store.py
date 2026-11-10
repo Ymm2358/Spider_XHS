@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS notes (
     collected    INTEGER DEFAULT 0,
     comment      INTEGER DEFAULT 0,
     share        INTEGER DEFAULT 0,
+    image_count  INTEGER DEFAULT 0,
     tags_json    TEXT,
     cover_url    TEXT,
     url          TEXT,
@@ -76,7 +77,16 @@ def connect(db_path: Optional[Path] = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path or DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """轻量迁移：老库缺列时补上，避免每次改 schema 都要重建。"""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(notes)")}
+    if "image_count" not in columns:
+        conn.execute("ALTER TABLE notes ADD COLUMN image_count INTEGER DEFAULT 0")
+        conn.commit()
 
 
 def now_iso() -> str:
@@ -106,6 +116,7 @@ def upsert_notes(conn: sqlite3.Connection, notes: Iterable[dict]) -> tuple[int, 
                     collected = MAX(collected, ?),
                     comment = MAX(comment, ?),
                     share = MAX(share, ?),
+                    image_count = MAX(image_count, ?),
                     tags_json = COALESCE(NULLIF(?, ''), tags_json),
                     cover_url = COALESCE(NULLIF(?, ''), cover_url),
                     url = COALESCE(NULLIF(?, ''), url),
@@ -126,6 +137,7 @@ def upsert_notes(conn: sqlite3.Connection, notes: Iterable[dict]) -> tuple[int, 
                     note.get("collected", 0),
                     note.get("comment", 0),
                     note.get("share", 0),
+                    note.get("image_count", 0),
                     json.dumps(note.get("tags") or [], ensure_ascii=False),
                     note.get("cover_url", ""),
                     note.get("url", ""),
@@ -142,8 +154,8 @@ def upsert_notes(conn: sqlite3.Connection, notes: Iterable[dict]) -> tuple[int, 
                 INSERT INTO notes (
                     note_id, title, desc, note_type, publish_ts, publish_text,
                     author_id, author_nick, liked, collected, comment, share,
-                    tags_json, cover_url, url, keyword, source, first_seen, last_seen, raw_json
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    image_count, tags_json, cover_url, url, keyword, source, first_seen, last_seen, raw_json
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     note["note_id"],
@@ -158,6 +170,7 @@ def upsert_notes(conn: sqlite3.Connection, notes: Iterable[dict]) -> tuple[int, 
                     note.get("collected", 0),
                     note.get("comment", 0),
                     note.get("share", 0),
+                    note.get("image_count", 0),
                     json.dumps(note.get("tags") or [], ensure_ascii=False),
                     note.get("cover_url", ""),
                     note.get("url", ""),

@@ -129,6 +129,7 @@ def note_from_item(item: dict, keyword: str = "", source: str = "") -> Optional[
     if not note_type:
         note_type = "video" if card.get("video") else "normal"
 
+    images = card.get("image_list") or []
     return {
         "note_id": note_id,
         "title": str(card.get("display_title") or card.get("title") or "").strip(),
@@ -143,6 +144,7 @@ def note_from_item(item: dict, keyword: str = "", source: str = "") -> Optional[
         "comment": parse_count(interact.get("comment_count") or interact.get("commentCount")),
         "share": parse_count(interact.get("shared_count") or interact.get("share_count")),
         "tags": _tags(card),
+        "image_count": len(images) if isinstance(images, list) else 0,
         "cover_url": _first_url(card.get("cover")),
         "xsec_token": xsec_token,
         "url": (
