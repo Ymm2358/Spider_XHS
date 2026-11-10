@@ -13,9 +13,16 @@ def fetch_author(api, author_id: str) -> dict | None:
     ok, _message, data = api.get_user_info(author_id)
     if not ok or not isinstance(data, dict):
         return None
-    basic = data.get("basic_info") or {}
+    # 上游对 40001（账号安全验证）也返回 success=True，真正的内容在 data.data 里。
+    # 不检查这一层会把失败当成成功，写出 fans=None 的空记录。
+    if data.get("code") not in (None, 0):
+        return None
+    payload = data.get("data")
+    if not isinstance(payload, dict):
+        return None
+    basic = payload.get("basic_info") or {}
     fans = None
-    for item in data.get("interactions") or []:
+    for item in payload.get("interactions") or []:
         if isinstance(item, dict) and item.get("type") == "fans":
             fans = parse_count(item.get("count"))
             break
@@ -64,6 +71,7 @@ def enrich(conn, api=None, limit: int = 60, delay: tuple[float, float] = (1.5, 3
                     (author["fans"], author["author_id"]),
                 )
             done += 1
+            blocked = 0
         else:
             failed += 1
             blocked += 1
@@ -74,7 +82,7 @@ def enrich(conn, api=None, limit: int = 60, delay: tuple[float, float] = (1.5, 3
                     "requested": len(rows),
                     "done": done,
                     "failed": failed,
-                    "stopped": "连续 3 个作者触发安全验证（40001），已停止。换时间再跑，或降低频率。",
+                    "stopped": "连续 3 个作者失败（多半是 40001 安全验证），已停止。换时间再跑，或降低频率。",
                 }
         if index < len(rows) - 1:
             time.sleep(random.uniform(*delay))
