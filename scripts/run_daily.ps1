@@ -89,6 +89,15 @@ try {
             }
         }
     }
+
+    Write-Log "导出 PDF 和分享图"
+    & $python -m xhsops export 2>&1 | Tee-Object -FilePath $log -Append
+    $pdf = Join-Path $root "reports\$today\brief.pdf"
+    if (Test-Path $pdf) {
+        Write-Log "完成：$pdf"
+    } else {
+        Write-Log "PDF 没有生成，检查 export 的报错"
+    }
 }
 finally {
     Pop-Location

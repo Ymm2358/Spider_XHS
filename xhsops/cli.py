@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import __version__, store
-from .config import DB_PATH, ROOT, ensure_dirs, load_env, pc_cookie
+from .config import DB_PATH, REPORT_DIR, ROOT, ensure_dirs, load_env, pc_cookie
 from .adapters import UpstreamError, build_pc_api
 
 RISK_HINTS = ("461", "471", "406", "风控", "verify", "captcha")
@@ -345,6 +345,44 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    from . import export, render
+    from .metrics import analyze
+
+    conn = store.connect()
+    analysis = analyze(conn, window_days=args.days)
+    day = (analysis.get("generated_at") or "")[:10]
+    folder = REPORT_DIR / day
+
+    advice = ""
+    advice_path = folder / "advice.md"
+    if advice_path.exists():
+        advice = advice_path.read_text(encoding="utf-8")
+
+    html_full = render.write_html(render.render_full(analysis, advice), folder / "brief.html")
+    outputs: list[Path] = []
+
+    if not args.no_pdf:
+        outputs.append(export.to_pdf(html_full, folder / "brief.pdf"))
+
+    if not args.no_png:
+        card_html = render.write_html(render.render_card(analysis), folder / "summary.html")
+        outputs.append(export.to_png(card_html, folder / "summary.png", 1080, 1440))
+
+    if args.json:
+        _print_json({"ok": True, "outputs": [str(p) for p in outputs]})
+    else:
+        for path in outputs:
+            print(f"已生成：{path}")
+
+    if args.open and outputs:
+        import os
+
+        os.startfile(str(outputs[0]))  # noqa: S606 - 本地打开自己生成的文件
+
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     conn = store.connect()
     data = store.stats(conn)
@@ -415,8 +453,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=8787)
     serve.set_defaults(func=cmd_serve)
 
+    export_cmd = sub.add_parser("export", help="导出 PDF 和分享图")
+    export_cmd.add_argument("--days", type=int, default=7)
+    export_cmd.add_argument("--no-pdf", action="store_true")
+    export_cmd.add_argument("--no-png", action="store_true")
+    export_cmd.add_argument("--open", action="store_true", help="生成后直接打开")
+    export_cmd.set_defaults(func=cmd_export)
+
     # 让 --json 在子命令前后都能用：子命令里用 SUPPRESS，避免覆盖顶层已经解析出的值。
-    for subparser in (doctor, collect, enrich, batch, status, brief):
+    for subparser in (doctor, collect, enrich, batch, status, brief, serve, export_cmd):
         subparser.add_argument(
             "--json", action="store_true", default=argparse.SUPPRESS, help="输出 JSON，供 agent 解析"
         )
