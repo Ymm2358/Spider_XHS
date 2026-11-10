@@ -58,6 +58,21 @@ CREATE TABLE IF NOT EXISTS authors (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS comments (
+    comment_id  TEXT PRIMARY KEY,
+    note_id     TEXT,
+    content     TEXT,
+    like_count  INTEGER DEFAULT 0,
+    author_id   TEXT,
+    author_nick TEXT,
+    create_ts   INTEGER,
+    sub_count   INTEGER DEFAULT 0,
+    source      TEXT,
+    first_seen  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_note ON comments(note_id);
+
 CREATE TABLE IF NOT EXISTS runs (
     run_id     INTEGER PRIMARY KEY AUTOINCREMENT,
     started    TEXT,
@@ -204,8 +219,44 @@ def upsert_notes(conn: sqlite3.Connection, notes: Iterable[dict]) -> tuple[int, 
     return inserted, updated
 
 
+def upsert_comments(conn: sqlite3.Connection, comments: Iterable[dict]) -> int:
+    """评论只增不改内容，点赞数取最大值。返回新增条数。"""
+    inserted = 0
+    ts = now_iso()
+    for item in comments:
+        exists = conn.execute(
+            "SELECT 1 FROM comments WHERE comment_id = ?", (item["comment_id"],)
+        ).fetchone()
+        if exists:
+            conn.execute(
+                "UPDATE comments SET like_count = MAX(like_count, ?) WHERE comment_id = ?",
+                (item.get("like_count", 0), item["comment_id"]),
+            )
+            continue
+        conn.execute(
+            """INSERT INTO comments
+               (comment_id, note_id, content, like_count, author_id, author_nick,
+                create_ts, sub_count, source, first_seen)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                item["comment_id"],
+                item.get("note_id", ""),
+                item.get("content", ""),
+                item.get("like_count", 0),
+                item.get("author_id", ""),
+                item.get("author_nick", ""),
+                item.get("create_ts"),
+                item.get("sub_count", 0),
+                item.get("source", ""),
+                ts,
+            ),
+        )
+        inserted += 1
+    conn.commit()
+    return inserted
+
+
 def start_run(conn: sqlite3.Connection, kind: str, target: str) -> int:
-    # 进程被强杀时 run 会一直挂在 running，开新任务前顺手清理。
     conn.execute(
         """UPDATE runs SET status='aborted', finished=?
            WHERE status='running' AND replace(started,'T',' ') < datetime('now','-6 hours')""",

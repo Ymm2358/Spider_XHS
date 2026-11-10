@@ -15,6 +15,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from ..config import DATA_DIR, ensure_dirs
+from .. import store
+from ..ingest import parse, save
 
 TOKEN_PATH = DATA_DIR / "token.txt"
 INBOX = DATA_DIR / "raw" / "extension"
@@ -53,7 +55,26 @@ def stats() -> dict:
             total += count
             if folder.name == day:
                 today = count
-    return {"ok": True, "total": total, "today": today, "day": day}
+
+    conn = store.connect()
+    try:
+        notes = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
+        comments = conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0]
+        ext_notes = conn.execute(
+            "SELECT COUNT(*) FROM notes WHERE source LIKE 'ext:%'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    return {
+        "ok": True,
+        "raw_today": today,
+        "raw_total": total,
+        "notes": notes,
+        "ext_notes": ext_notes,
+        "comments": comments,
+        "day": day,
+    }
 
 
 @app.post("/ingest")
@@ -72,7 +93,9 @@ async def ingest(request: Request, x_xhsops_token: str = Header(default="")) -> 
         raise HTTPException(status_code=400, detail="empty body")
 
     stamp = time.strftime("%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}"
-    kind = "search" if "/search/" in url else ("feed" if "/feed" in url else "other")
+    from ..ingest import classify
+
+    kind = classify(url)
     path = _day_dir() / f"{stamp}-{kind}.json"
     path.write_text(
         json.dumps(
@@ -88,7 +111,16 @@ async def ingest(request: Request, x_xhsops_token: str = Header(default="")) -> 
         encoding="utf-8",
     )
     print(f"[ingest] {kind} {len(body)} bytes -> {path.name}", flush=True)
-    return {"ok": True, "stored": path.name, "kind": kind, "bytes": len(body)}
+
+    parsed = parse({"url": url, "body": body, "page": payload.get("page")})
+    conn = store.connect()
+    try:
+        result = save(conn, parsed)
+    finally:
+        conn.close()
+    print(f"[parse]  {result}", flush=True)
+
+    return {"ok": True, "stored": path.name, **result}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -103,7 +135,8 @@ code{{background:#222;padding:2px 6px;border-radius:4px}}
 </style></head><body>
 <h1>xhs-ops bridge</h1>
 <p class="ok">服务在运行</p>
-<p>今天收到 <b>{data['today']}</b> 条，累计 <b>{data['total']}</b> 条。</p>
+<p>原始响应：今天 <b>{data['raw_today']}</b> 条，累计 <b>{data['raw_total']}</b> 条。</p>
+<p>入库笔记：<b>{data['notes']}</b> 条，其中插件来源 <b>{data['ext_notes']}</b> 条；评论 <b>{data['comments']}</b> 条。</p>
 <p>数据目录：<code>{INBOX}</code></p>
 <p>插件 token：<code>{get_token()}</code></p>
 </body></html>"""

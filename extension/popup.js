@@ -3,10 +3,13 @@ const DEFAULT_ENDPOINT = "http://127.0.0.1:8787";
 const $ = (id) => document.getElementById(id);
 
 async function load() {
-  const stored = await chrome.storage.local.get(["token", "endpoint", "okCount", "failCount"]);
+  const stored = await chrome.storage.local.get(["token", "endpoint", "okCount", "failCount", "queue"]);
   $("endpoint").value = stored.endpoint || DEFAULT_ENDPOINT;
   $("token").value = stored.token || "";
-  $("counts").textContent = `已发送 ${stored.okCount || 0} 条，失败 ${stored.failCount || 0} 条`;
+  const queued = (stored.queue || []).length;
+  $("counts").textContent =
+    `已发送 ${stored.okCount || 0} 条，失败 ${stored.failCount || 0} 条` +
+    (queued ? `，待补发 ${queued} 条` : "");
   checkHealth();
 }
 
