@@ -39,7 +39,7 @@ function Write-Log($message) {
 Write-Log "开始，方向=$Direction，超时=${Timeout}s"
 
 if (-not (Test-Path $python)) {
-    Write-Log "找不到 $python，先创建虚拟环境：python -m venv .venv && .venv\Scripts\pip install -r requirements.txt -r requirements-xhsops.txt"
+    Write-Log "找不到 $python，先创建虚拟环境：python -m venv .venv && .venv\Scripts\pip install -r vendor\spider_xhs\requirements.txt -r requirements-xhsops.txt"
     exit 1
 }
 
