@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "xhs-ops bridge",
+  "version": "0.1.0",
+  "description": "把小红书页面已经加载的数据送到本地 xhs-ops 服务，不额外发请求。",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://*.xiaohongshu.com/*",
+    "http://127.0.0.1:8787/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.xiaohongshu.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.xiaohongshu.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "xhs-ops"
+  }
+}

@@ -1,0 +1,4 @@
+# xhsops 自己的依赖，与上游 requirements.txt 分开，避免合并上游时冲突。
+PyYAML>=6.0
+# 上游 2026-10 的 webSsk 链路用到，但 requirements.txt 漏了，补上。
+cryptography>=42

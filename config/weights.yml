@@ -1,0 +1,18 @@
+# 加权互动。小红书里收藏和评论的权重明显高于点赞，分享介于两者之间。
+engagement:
+  liked: 1
+  collected: 3
+  comment: 4
+  share: 2
+
+# 同龄段分位：按发布时长分桶，避免老笔记靠时间堆量占榜。
+cohort:
+  age_buckets_hours: [72, 168, 720]
+  viral_z: 2.0
+
+# 素人判定：粉丝数低于这个值算素人，用来算「素人爆款率」。
+novice_fans: 10000
+
+# 蓝海指数：需求分位 - 供给分位，再归一到 0-1。
+blue_ocean:
+  supply_days: 7
