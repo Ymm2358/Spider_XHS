@@ -1,21 +1,66 @@
-// 运行在页面主世界（MAIN world），能看到页面自己的 fetch / XHR。
-// 只复制响应，不改请求、不改返回值，页面行为完全不受影响。
+// 运行在页面主世界（MAIN world），只复制白名单接口的响应。
+// 限流 + 去重 + 最小体积过滤，避免在消息页这类高频页面上拖慢页面。
 (() => {
-  const MAX_BYTES = 150000;
-  const TARGETS = [/edith\.xiaohongshu\.com/, /so\.xiaohongshu\.com/];
+  const MAX_BYTES = 120000;
+  const MIN_BYTES = 200;
+  const DEDUPE_MS = 3000;
+  const WINDOW_MS = 3000;
+  const MAX_PER_WINDOW = 5;
 
-  const shouldCapture = (url) => {
-    if (!url) return false;
-    return TARGETS.some((re) => re.test(url));
+  // 只收这些接口，其余一律不碰。宁可少收，也不能影响正常使用。
+  const WHITELIST = [
+    /^\/api\/sns\/web\/v2\/search\/notes$/,
+    /^\/api\/sns\/web\/v1\/homefeed$/,
+    /^\/api\/sns\/web\/v1\/feed$/,
+    /^\/api\/sns\/web\/v2\/comment\/page$/,
+    /^\/api\/sns\/web\/v1\/user_posted$/,
+    /^\/api\/sns\/web\/v1\/you\//,
+    /^\/api\/sns\/web\/v2\/user\/me$/,
+    /^\/api\/sns\/web\/v1\/notification\//
+  ];
+
+  const lastSeen = new Map();
+  let windowHits = [];
+
+  const pathOf = (url) => {
+    try {
+      return new URL(url, location.href).pathname;
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const allowed = (url) => {
+    const path = pathOf(url);
+    if (!path || !WHITELIST.some((re) => re.test(path))) return false;
+
+    const now = Date.now();
+    if (now - (lastSeen.get(path) || 0) < DEDUPE_MS) return false;
+
+    windowHits = windowHits.filter((t) => now - t < WINDOW_MS);
+    if (windowHits.length >= MAX_PER_WINDOW) return false;
+
+    lastSeen.set(path, now);
+    windowHits.push(now);
+
+    if (lastSeen.size > 200) {
+      for (const [key, ts] of lastSeen) {
+        if (now - ts > 60000) lastSeen.delete(key);
+      }
+    }
+    return true;
   };
 
   const send = (url, text) => {
-    if (!text || text.length > MAX_BYTES) return;
-    try {
-      window.postMessage({ source: "xhsops", url, body: text }, "*");
-    } catch (e) {
-      /* 页面 CSP 或序列化失败时静默放弃，不影响页面 */
-    }
+    if (!text || text.length < MIN_BYTES || text.length > MAX_BYTES) return;
+    // 放到下一个任务，避免在页面关键渲染路径上做序列化。
+    setTimeout(() => {
+      try {
+        window.postMessage({ source: "xhsops", url, body: text }, "*");
+      } catch (e) {
+        /* 忽略 */
+      }
+    }, 0);
   };
 
   const originalFetch = window.fetch;
@@ -25,14 +70,10 @@
       try {
         const input = args[0];
         const url = typeof input === "string" ? input : input && input.url ? input.url : "";
-        if (shouldCapture(url)) {
+        if (url && allowed(url)) {
           promise
             .then((response) => {
-              response
-                .clone()
-                .text()
-                .then((text) => send(url, text))
-                .catch(() => {});
+              response.clone().text().then((text) => send(url, text)).catch(() => {});
             })
             .catch(() => {});
         }
@@ -53,15 +94,16 @@
 
   XMLHttpRequest.prototype.send = function (...args) {
     try {
-      this.addEventListener("load", () => {
-        try {
-          if (shouldCapture(this.__xhsops_url || "") && this.responseText) {
-            send(this.__xhsops_url, this.responseText);
+      const url = this.__xhsops_url || "";
+      if (url && allowed(url)) {
+        this.addEventListener("load", () => {
+          try {
+            if (this.responseText) send(url, this.responseText);
+          } catch (e) {
+            /* 忽略 */
           }
-        } catch (e) {
-          /* 忽略 */
-        }
-      });
+        });
+      }
     } catch (e) {
       /* 忽略 */
     }

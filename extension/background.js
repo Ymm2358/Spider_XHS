@@ -1,13 +1,19 @@
-// 后台：把页面数据 POST 到本地服务。
-// 服务没开时先存本地队列（最多 100 条），下次成功发送后自动补发。
+// 后台：批量把页面数据送到本地服务。
+// 目的：减少 HTTP 次数和消息通道压力，消息页这类高频页面不卡。
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8787";
-const QUEUE_LIMIT = 100;
+const QUEUE_LIMIT = 200;
+const BATCH_SIZE = 10;
+const FLUSH_DELAY = 1500;
+
+let buffer = [];
+let timer = null;
 
 async function config() {
-  const stored = await chrome.storage.local.get(["token", "endpoint"]);
+  const stored = await chrome.storage.local.get(["token", "endpoint", "paused"]);
   return {
     token: stored.token || "",
-    endpoint: stored.endpoint || DEFAULT_ENDPOINT
+    endpoint: stored.endpoint || DEFAULT_ENDPOINT,
+    paused: Boolean(stored.paused)
   };
 }
 
@@ -16,63 +22,88 @@ async function bump(key, delta = 1) {
   await chrome.storage.local.set({ [key]: (stored[key] || 0) + delta });
 }
 
-async function post(payload) {
+async function postBatch(items) {
   const { token, endpoint } = await config();
-  const response = await fetch(`${endpoint}/ingest`, {
+  const response = await fetch(`${endpoint}/ingest/batch`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-XHSOPS-TOKEN": token
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ items })
   });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
 
-async function enqueue(payload) {
+async function pushQueue(items) {
   const { queue = [] } = await chrome.storage.local.get(["queue"]);
-  queue.push(payload);
-  await chrome.storage.local.set({ queue: queue.slice(-QUEUE_LIMIT) });
+  const merged = queue.concat(items);
+  await chrome.storage.local.set({ queue: merged.slice(-QUEUE_LIMIT) });
 }
 
 async function flushQueue() {
   const { queue = [] } = await chrome.storage.local.get(["queue"]);
   if (!queue.length) return;
   const remaining = [];
-  for (const item of queue) {
+  for (let i = 0; i < queue.length; i += BATCH_SIZE) {
+    const chunk = queue.slice(i, i + BATCH_SIZE);
     try {
-      await post(item);
-      await bump("okCount");
+      await postBatch(chunk);
+      await bump("okCount", chunk.length);
     } catch (error) {
-      remaining.push(item);
+      remaining.push(...chunk);
     }
   }
   await chrome.storage.local.set({ queue: remaining });
+}
+
+function schedule() {
+  if (timer) return;
+  timer = setTimeout(() => {
+    timer = null;
+    flush();
+  }, FLUSH_DELAY);
+}
+
+async function flush() {
+  if (!buffer.length) return;
+  const items = buffer.splice(0, BATCH_SIZE);
+  try {
+    await postBatch(items);
+    await bump("okCount", items.length);
+    await flushQueue();
+  } catch (error) {
+    await pushQueue(items);
+    await bump("failCount", items.length);
+  }
+  if (buffer.length) schedule();
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== "ingest") return;
 
   (async () => {
-    const payload = {
+    const { paused } = await config();
+    if (paused) {
+      sendResponse({ ok: true, paused: true });
+      return;
+    }
+    buffer.push({
       url: message.url,
       body: message.body,
       page: message.page,
       ts: Date.now()
-    };
-    try {
-      await post(payload);
-      await bump("okCount");
-      await flushQueue();
-      sendResponse({ ok: true });
-    } catch (error) {
-      await enqueue(payload);
-      await bump("failCount");
-      sendResponse({ ok: false, error: String(error) });
+    });
+    if (buffer.length >= BATCH_SIZE) {
+      await flush();
+    } else {
+      schedule();
     }
+    sendResponse({ ok: true });
   })();
 
-  return true; // 异步响应
+  return true;
 });
+
+chrome.runtime.onStartup.addListener(flushQueue);
+chrome.runtime.onInstalled.addListener(flushQueue);

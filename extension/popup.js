@@ -3,9 +3,10 @@ const DEFAULT_ENDPOINT = "http://127.0.0.1:8787";
 const $ = (id) => document.getElementById(id);
 
 async function load() {
-  const stored = await chrome.storage.local.get(["token", "endpoint", "okCount", "failCount", "queue"]);
+  const stored = await chrome.storage.local.get(["token", "endpoint", "okCount", "failCount", "queue", "paused"]);
   $("endpoint").value = stored.endpoint || DEFAULT_ENDPOINT;
   $("token").value = stored.token || "";
+  $("paused").checked = Boolean(stored.paused);
   const queued = (stored.queue || []).length;
   $("counts").textContent =
     `已发送 ${stored.okCount || 0} 条，失败 ${stored.failCount || 0} 条` +
@@ -33,6 +34,10 @@ async function save() {
   });
   checkHealth();
 }
+
+$("paused").addEventListener("change", async (event) => {
+  await chrome.storage.local.set({ paused: event.target.checked });
+});
 
 async function test() {
   await save();

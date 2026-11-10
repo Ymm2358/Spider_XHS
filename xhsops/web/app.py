@@ -14,9 +14,9 @@ from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from ..config import DATA_DIR, ensure_dirs
 from .. import store
-from ..ingest import parse, save
+from ..config import DATA_DIR, ensure_dirs
+from ..ingest import classify, parse, save
 
 TOKEN_PATH = DATA_DIR / "token.txt"
 INBOX = DATA_DIR / "raw" / "extension"
@@ -37,9 +37,91 @@ def _day_dir() -> Path:
     return folder
 
 
+def _store_payload(payload: dict) -> dict:
+    url = str(payload.get("url") or "")
+    body = payload.get("body") or ""
+    if not isinstance(body, str) or not body:
+        return {"ok": False, "error": "empty body"}
+
+    stamp = time.strftime("%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}"
+    kind = classify(url)
+    path = _day_dir() / f"{stamp}-{kind}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "url": url,
+                "page": payload.get("page"),
+                "ts": payload.get("ts"),
+                "received_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "body": body,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    parsed = parse({"url": url, "body": body, "page": payload.get("page")})
+    conn = store.connect()
+    try:
+        result = save(conn, parsed)
+    finally:
+        conn.close()
+
+    return {"ok": True, "stored": path.name, **result}
+
+
+def _check(token: str) -> None:
+    if token != get_token():
+        raise HTTPException(status_code=401, detail="bad token")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "xhs-ops", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
+
+
+@app.post("/ingest")
+async def ingest(request: Request, x_xhsops_token: str = Header(default="")) -> dict:
+    _check(x_xhsops_token)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="body must be json")
+    result = _store_payload(payload)
+    print(f"[ingest] {result}", flush=True)
+    return result
+
+
+@app.post("/ingest/batch")
+async def ingest_batch(request: Request, x_xhsops_token: str = Header(default="")) -> dict:
+    _check(x_xhsops_token)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="body must be json")
+
+    items = payload.get("items") or []
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="items must be a list")
+
+    notes = inserted = comments = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        result = _store_payload(item)
+        notes += result.get("notes", 0)
+        inserted += result.get("inserted", 0)
+        comments += result.get("comments", 0)
+
+    summary = {
+        "ok": True,
+        "items": len(items),
+        "notes": notes,
+        "inserted": inserted,
+        "comments": comments,
+    }
+    print(f"[batch]  {summary}", flush=True)
+    return summary
 
 
 @app.get("/stats")
@@ -75,52 +157,6 @@ def stats() -> dict:
         "comments": comments,
         "day": day,
     }
-
-
-@app.post("/ingest")
-async def ingest(request: Request, x_xhsops_token: str = Header(default="")) -> dict:
-    if x_xhsops_token != get_token():
-        raise HTTPException(status_code=401, detail="bad token")
-
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="body must be json")
-
-    url = str(payload.get("url") or "")
-    body = payload.get("body") or ""
-    if not isinstance(body, str) or not body:
-        raise HTTPException(status_code=400, detail="empty body")
-
-    stamp = time.strftime("%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}"
-    from ..ingest import classify
-
-    kind = classify(url)
-    path = _day_dir() / f"{stamp}-{kind}.json"
-    path.write_text(
-        json.dumps(
-            {
-                "url": url,
-                "page": payload.get("page"),
-                "ts": payload.get("ts"),
-                "received_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "body": body,
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    print(f"[ingest] {kind} {len(body)} bytes -> {path.name}", flush=True)
-
-    parsed = parse({"url": url, "body": body, "page": payload.get("page")})
-    conn = store.connect()
-    try:
-        result = save(conn, parsed)
-    finally:
-        conn.close()
-    print(f"[parse]  {result}", flush=True)
-
-    return {"ok": True, "stored": path.name, **result}
 
 
 @app.get("/", response_class=HTMLResponse)
