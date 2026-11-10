@@ -72,6 +72,7 @@ def enrich(conn, api=None, limit: int = 60, delay: tuple[float, float] = (1.5, 3
                 )
             done += 1
             blocked = 0
+            conn.commit()
         else:
             failed += 1
             blocked += 1
