@@ -24,6 +24,7 @@
 - `brief.json` 已能输出方向对比、关键词蓝海榜、起量笔记。
 - `xhs-analyst` 已跑通一次完整产出：3 条重点 + 7 条备选，写入 `reports/2026-11-10/advice.md`，19 条证据的 note_id 和 url 全部回验存在。
 - 当前结论：城市漫步、数码体验蓝海指数最高；摄影、游戏供给最密，泛教程没有位置。
+- PR 已开：https://github.com/Ymm2358/Spider_XHS/pull/1（`feat/p0-runtime` → `master`）。
 
 # 当前目标
 

@@ -1,4 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "tongji/DeepSeek-V4.1-Flash",
   "instructions": ["xhsops/AGENTS.md"]
 }
