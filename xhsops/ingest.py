@@ -26,6 +26,8 @@ def classify(url: str) -> str:
         return "homefeed"
     if "/v1/feed" in url:
         return "feed"
+    if "/user_posted" in url:
+        return "user_posted"
     if "/comment/page" in url:
         return "comment"
     if "/user/me" in url:
@@ -53,9 +55,10 @@ def parse(payload: dict) -> dict:
     if not isinstance(inner, dict):
         return result
 
-    if kind in ("search", "homefeed", "feed"):
+    if kind in ("search", "homefeed", "feed", "user_posted"):
         keyword = keyword_from_page(page) if kind == "search" else ""
-        for item in inner.get("items") or []:
+        items = inner.get("notes") if kind == "user_posted" else inner.get("items")
+        for item in items or []:
             note = note_from_item(item, keyword=keyword, source=f"ext:{kind}")
             if note:
                 result["notes"].append(note)

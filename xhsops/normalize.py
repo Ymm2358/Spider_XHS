@@ -114,6 +114,9 @@ def note_from_item(item: dict, keyword: str = "", source: str = "") -> Optional[
     card = item.get("note_card") or item.get("noteCard") or item.get("note") or {}
     if not isinstance(card, dict):
         card = {}
+    # user_posted 返回的是裸 note card，没有 note_card 包装。
+    if not card and item.get("note_id"):
+        card = item
 
     note_id = str(item.get("id") or item.get("note_id") or card.get("note_id") or "")
     if not note_id:
@@ -124,6 +127,10 @@ def note_from_item(item: dict, keyword: str = "", source: str = "") -> Optional[
     xsec_token = str(item.get("xsec_token") or card.get("xsec_token") or "")
     publish_text = _corner_text(card)
     publish_ts = parse_publish_ts(publish_text)
+    if publish_ts is None:
+        raw_time = card.get("time") or item.get("time")
+        if isinstance(raw_time, (int, float)) and raw_time > 0:
+            publish_ts = int(raw_time / 1000) if raw_time > 1e12 else int(raw_time)
 
     note_type = str(card.get("type") or "")
     if not note_type:

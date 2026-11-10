@@ -134,6 +134,14 @@ def _keywords_for(args: argparse.Namespace) -> list[str]:
         return []
     if args.direction == "all":
         return [kw for item in directions for kw in (item.get("keywords") or [])]
+    if args.direction == "focus":
+        names = set(data.get("focus") or [])
+        return [
+            kw
+            for item in directions
+            if item.get("name") in names
+            for kw in (item.get("keywords") or [])
+        ]
     matched = [item for item in directions if item.get("name") == args.direction]
     return [kw for item in matched for kw in (item.get("keywords") or [])]
 
@@ -383,6 +391,39 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_replay(args: argparse.Namespace) -> int:
+    """把插件归档的原始响应重新解析入库。改了 parser 之后用它回填。"""
+    from .config import DATA_DIR
+    from .ingest import parse, save
+
+    folder = DATA_DIR / "raw" / "extension"
+    files = sorted(folder.glob("*/*.json")) if folder.exists() else []
+    if args.limit:
+        files = files[-args.limit :]
+
+    conn = store.connect()
+    notes = inserted = comments = 0
+    for path in files:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        result = save(conn, parse(payload))
+        notes += result["notes"]
+        inserted += result["inserted"]
+        comments += result["comments"]
+
+    summary = {
+        "ok": True,
+        "files": len(files),
+        "notes": notes,
+        "inserted": inserted,
+        "comments": comments,
+    }
+    _emit(summary, args.json)
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     conn = store.connect()
     data = store.stats(conn)
@@ -460,8 +501,12 @@ def build_parser() -> argparse.ArgumentParser:
     export_cmd.add_argument("--open", action="store_true", help="生成后直接打开")
     export_cmd.set_defaults(func=cmd_export)
 
+    replay = sub.add_parser("replay", help="重新解析插件归档的原始响应")
+    replay.add_argument("--limit", type=int, default=0, help="只处理最近 N 个文件")
+    replay.set_defaults(func=cmd_replay)
+
     # 让 --json 在子命令前后都能用：子命令里用 SUPPRESS，避免覆盖顶层已经解析出的值。
-    for subparser in (doctor, collect, enrich, batch, status, brief, serve, export_cmd):
+    for subparser in (doctor, collect, enrich, batch, status, brief, serve, export_cmd, replay):
         subparser.add_argument(
             "--json", action="store_true", default=argparse.SUPPRESS, help="输出 JSON，供 agent 解析"
         )

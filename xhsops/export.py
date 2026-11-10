@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 CANDIDATES = [
@@ -71,11 +72,22 @@ def _run(browser: str, args: list[str], timeout: int = 120) -> None:
         shutil.rmtree(profile, ignore_errors=True)
 
 
+def _writable(path: Path) -> Path:
+    """目标文件被 PDF 阅读器占用时，改用带时间后缀的文件名，不覆盖失败。"""
+    if not path.exists():
+        return path
+    try:
+        path.unlink()
+        return path
+    except PermissionError:
+        stamp = time.strftime("%H%M%S")
+        return path.with_name(f"{path.stem}-{stamp}{path.suffix}")
+
+
 def to_pdf(html_path: Path, pdf_path: Path, browser: str | None = None) -> Path:
     browser = browser or find_browser()
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    if pdf_path.exists():
-        pdf_path.unlink()
+    pdf_path = _writable(pdf_path)
     _run(
         browser,
         [
@@ -92,8 +104,7 @@ def to_pdf(html_path: Path, pdf_path: Path, browser: str | None = None) -> Path:
 def to_png(html_path: Path, png_path: Path, width: int = 1080, height: int = 1440, browser: str | None = None) -> Path:
     browser = browser or find_browser()
     png_path.parent.mkdir(parents=True, exist_ok=True)
-    if png_path.exists():
-        png_path.unlink()
+    png_path = _writable(png_path)
     _run(
         browser,
         [
