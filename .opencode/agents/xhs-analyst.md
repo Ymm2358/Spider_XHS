@@ -1,6 +1,7 @@
 ---
 description: 读本地小红书数据，产出每日选题建议
 mode: primary
+model: tongji/DeepSeek-V4.1-Flash
 permissions:
   - action: shell
     resource: "python -m xhsops *"
