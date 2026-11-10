@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,3 +64,10 @@ def proxies() -> Optional[dict]:
 def ensure_dirs() -> None:
     for path in (DATA_DIR, RAW_DIR, REPORT_DIR, DRAFT_DIR, CONFIG_DIR):
         path.mkdir(parents=True, exist_ok=True)
+
+
+def load_yaml(name: str) -> dict:
+    path = CONFIG_DIR / name
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}

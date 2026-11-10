@@ -123,11 +123,35 @@ def _print_human(report: dict) -> None:
     print("结论：" + ("可以开始采集" if report.get("ok") else "未通过，先解决上面的 FAIL"))
 
 
+def _keywords_for(args: argparse.Namespace) -> list[str]:
+    from .config import load_yaml
+
+    if args.keyword:
+        return list(args.keyword)
+    data = load_yaml("keywords.yml")
+    directions = data.get("directions") or []
+    if not args.direction:
+        return []
+    if args.direction == "all":
+        return [kw for item in directions for kw in (item.get("keywords") or [])]
+    matched = [item for item in directions if item.get("name") == args.direction]
+    return [kw for item in matched for kw in (item.get("keywords") or [])]
+
+
+def _profile_for(args: argparse.Namespace) -> list[dict]:
+    from .config import load_yaml
+
+    if args.sorts:
+        sorts = [int(s) for s in args.sorts.split(",") if s.strip()]
+        return [{"sort": sort, "note_time": 0, "limit": args.limit} for sort in sorts]
+    data = load_yaml("keywords.yml")
+    return data.get("profile") or [{"sort": 0, "note_time": 0, "limit": args.limit}]
+
+
 def cmd_collect(args: argparse.Namespace) -> int:
-    from .collect import collect_keywords, collect_search, collect_user_notes
+    from .collect import collect_profile, collect_user_notes
 
     conn = store.connect()
-    keywords = args.keyword or []
     if args.user:
         run_id = store.start_run(conn, "user", args.user)
         try:
@@ -141,19 +165,20 @@ def cmd_collect(args: argparse.Namespace) -> int:
             _emit({"ok": False, "error": str(exc)}, args.json)
             return 1
 
+    keywords = _keywords_for(args)
     if not keywords:
-        print("需要 --keyword 或 --user", file=sys.stderr)
+        print("需要 --keyword、--direction 或 --user", file=sys.stderr)
         return 2
 
-    sorts = tuple(int(s) for s in args.sorts.split(",") if s.strip())
+    profile = _profile_for(args)
     run_id = store.start_run(conn, "search", ",".join(keywords))
     try:
-        notes, errors = collect_keywords(keywords, limit=args.limit, sorts=sorts)
+        notes, errors = collect_profile(keywords, profile)
         inserted, updated = store.upsert_notes(conn, notes)
         store.finish_run(
             conn,
             run_id,
-            requested=len(keywords) * len(sorts) * args.limit,
+            requested=len(keywords) * len(profile) * max(int(p.get("limit", 0)) for p in profile),
             collected=len(notes),
             inserted=inserted,
             status="ok" if not errors else "partial",
@@ -162,8 +187,8 @@ def cmd_collect(args: argparse.Namespace) -> int:
         _emit(
             {
                 "ok": not errors,
-                "keywords": keywords,
-                "sorts": sorts,
+                "keywords": len(keywords),
+                "profile": profile,
                 "collected": len(notes),
                 "inserted": inserted,
                 "updated": updated,
@@ -176,6 +201,135 @@ def cmd_collect(args: argparse.Namespace) -> int:
         store.finish_run(conn, run_id, status="error", message=str(exc))
         _emit({"ok": False, "error": str(exc)}, args.json)
         return 1
+
+
+def cmd_enrich(args: argparse.Namespace) -> int:
+    from .enrich import enrich
+
+    conn = store.connect()
+    result = enrich(conn, limit=args.limit)
+    result["ok"] = True
+    _emit(result, args.json)
+    return 0
+
+
+def cmd_brief(args: argparse.Namespace) -> int:
+    from .metrics import analyze
+    from . import report
+
+    conn = store.connect()
+    analysis = analyze(conn, window_days=args.days)
+    md_path, json_path = report.write(analysis)
+    if args.json:
+        _print_json(analysis)
+    else:
+        print(f"日报：{md_path}")
+        print(f"数据：{json_path}")
+        print(f"样本 {analysis['total_notes']} 条，方向 {len(analysis['directions'])} 个")
+        for row in analysis["directions"]:
+            print(
+                f"  {row['direction']:<6} 笔记 {row['notes']:>4}  "
+                f"素人爆款率 {_fmt(row['novice_viral_rate'])}  蓝海 {_fmt(row['blue_ocean'])}"
+            )
+    return 0
+
+
+def _fmt(value) -> str:
+    if value is None:
+        return "—"
+    return f"{value * 100:.0f}%" if isinstance(value, float) and abs(value) <= 1 else f"{value:.2f}"
+
+
+def cmd_batch(args: argparse.Namespace) -> int:
+    """逐关键词起子进程采集。单个关键词卡住时超时终止，不影响其余关键词。"""
+    import subprocess
+
+    keywords = _keywords_for(args)
+    if not keywords:
+        print("需要 --keyword 或 --direction", file=sys.stderr)
+        return 2
+
+    results = []
+    errors = []
+    for index, keyword in enumerate(keywords, start=1):
+        cmd = [sys.executable, "-m", "xhsops", "collect", "--keyword", keyword, "--json", "--limit", str(args.limit)]
+        if args.sorts:
+            cmd += ["--sorts", args.sorts]
+        started = time.perf_counter()
+        stdout = stderr = ""
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+            try:
+                stdout, stderr = proc.communicate(timeout=args.timeout)
+            except subprocess.TimeoutExpired:
+                # 必须连子进程树一起杀：venv 的 python.exe 会再起一个真实的 python，
+                # 只杀父进程时管道不关闭，communicate 会一直等下去。
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True,
+                )
+                try:
+                    proc.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
+                raise
+            payload = _parse_json(stdout)
+            elapsed = round(time.perf_counter() - started, 1)
+            if payload:
+                payload["keyword"] = keyword
+                payload["seconds"] = elapsed
+                results.append(payload)
+                if payload.get("errors"):
+                    errors.extend(f"{keyword}: {item}" for item in payload["errors"])
+                print(
+                    f"[{index}/{len(keywords)}] {keyword}  {elapsed}s  "
+                    f"采集 {payload.get('collected', 0)}  新增 {payload.get('inserted', 0)}",
+                    flush=True,
+                )
+            else:
+                errors.append(f"{keyword}: 子进程无输出 {stderr[-300:]}")
+                print(f"[{index}/{len(keywords)}] {keyword}  无输出", flush=True)
+        except subprocess.TimeoutExpired:
+            errors.append(f"{keyword}: 超过 {args.timeout}s 未完成，已终止")
+            print(f"[{index}/{len(keywords)}] {keyword}  超时终止", flush=True)
+        if index < len(keywords) and args.cooldown:
+            time.sleep(args.cooldown)
+
+    summary = {
+        "ok": not errors,
+        "keywords": len(keywords),
+        "collected": sum(item.get("collected", 0) for item in results),
+        "inserted": sum(item.get("inserted", 0) for item in results),
+        "errors": errors,
+        "results": results,
+    }
+    if args.json:
+        _print_json(summary)
+    else:
+        _emit({key: value for key, value in summary.items() if key != "results"}, False)
+    return 0 if not errors else 1
+
+
+def _parse_json(text: str) -> Optional[dict]:
+    text = (text or "").strip()
+    if not text:
+        return None
+    start = text.find("{")
+    if start < 0:
+        return None
+    try:
+        return json.loads(text[start:])
+    except Exception:
+        return None
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -217,13 +371,37 @@ def build_parser() -> argparse.ArgumentParser:
 
     collect = sub.add_parser("collect", help="采集关键词或用户主页")
     collect.add_argument("--keyword", action="append", help="可重复传入多个关键词")
+    collect.add_argument("--direction", help="按 config/keywords.yml 的方向采集，all 表示全部")
     collect.add_argument("--user", help="用户主页链接")
-    collect.add_argument("--limit", type=int, default=60)
-    collect.add_argument("--sorts", default="0", help="逗号分隔：0 综合 1 最新 2 最多点赞")
+    collect.add_argument("--limit", type=int, default=40)
+    collect.add_argument("--sorts", help="临时覆盖采集档位，如 0,2,1；不传则用 keywords.yml 的 profile")
     collect.set_defaults(func=cmd_collect)
+
+    enrich = sub.add_parser("enrich", help="补全作者粉丝数")
+    enrich.add_argument("--limit", type=int, default=60, help="本次最多补多少个作者")
+    enrich.set_defaults(func=cmd_enrich)
+
+    batch = sub.add_parser("batch", help="逐关键词采集，单个超时不影响整体")
+    batch.add_argument("--keyword", action="append", help="可重复传入多个关键词")
+    batch.add_argument("--direction", help="按 keywords.yml 的方向采集，all 表示全部")
+    batch.add_argument("--limit", type=int, default=40)
+    batch.add_argument("--sorts", help="临时覆盖采集档位，如 0,2,1")
+    batch.add_argument("--timeout", type=int, default=180, help="单个关键词的超时秒数")
+    batch.add_argument("--cooldown", type=int, default=8, help="关键词之间的冷却秒数")
+    batch.set_defaults(func=cmd_batch)
 
     status = sub.add_parser("status", help="查看库存与最近任务")
     status.set_defaults(func=cmd_status)
+
+    brief = sub.add_parser("brief", help="生成日报（Markdown + JSON）")
+    brief.add_argument("--days", type=int, default=7, help="统计窗口，默认 7 天")
+    brief.set_defaults(func=cmd_brief)
+
+    # 让 --json 在子命令前后都能用：子命令里用 SUPPRESS，避免覆盖顶层已经解析出的值。
+    for subparser in (doctor, collect, enrich, batch, status, brief):
+        subparser.add_argument(
+            "--json", action="store_true", default=argparse.SUPPRESS, help="输出 JSON，供 agent 解析"
+        )
 
     return parser
 
@@ -239,6 +417,10 @@ def _configure_stdio() -> None:
 
 def main(argv: Optional[list[str]] = None) -> int:
     _configure_stdio()
+    # 上游每个失败都会打完整 traceback，批量跑时会把终端刷爆；需要排查时用 --debug 打开。
+    from loguru import logger
+
+    logger.remove()
     args = build_parser().parse_args(argv)
     return args.func(args)
 

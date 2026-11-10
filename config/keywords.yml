@@ -32,3 +32,15 @@ directions:
 
 # 监控阶段：填 3-5 个词后只跑这些
 focus: []
+
+# 每次采集跑三档：综合看基线，最热看什么在爆，最新+一周内看供给速度。
+profile:
+  - sort: 0
+    note_time: 0
+    limit: 40
+  - sort: 2
+    note_time: 0
+    limit: 40
+  - sort: 1
+    note_time: 2
+    limit: 40

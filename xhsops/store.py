@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS notes (
     publish_text TEXT,
     author_id    TEXT,
     author_nick  TEXT,
+    author_fans  INTEGER,
     liked        INTEGER DEFAULT 0,
     collected    INTEGER DEFAULT 0,
     comment      INTEGER DEFAULT 0,
@@ -86,7 +87,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(notes)")}
     if "image_count" not in columns:
         conn.execute("ALTER TABLE notes ADD COLUMN image_count INTEGER DEFAULT 0")
-        conn.commit()
+    if "author_fans" not in columns:
+        conn.execute("ALTER TABLE notes ADD COLUMN author_fans INTEGER")
+    conn.commit()
 
 
 def now_iso() -> str:
@@ -202,6 +205,12 @@ def upsert_notes(conn: sqlite3.Connection, notes: Iterable[dict]) -> tuple[int, 
 
 
 def start_run(conn: sqlite3.Connection, kind: str, target: str) -> int:
+    # 进程被强杀时 run 会一直挂在 running，开新任务前顺手清理。
+    conn.execute(
+        """UPDATE runs SET status='aborted', finished=?
+           WHERE status='running' AND replace(started,'T',' ') < datetime('now','-6 hours')""",
+        (now_iso(),),
+    )
     cur = conn.execute(
         "INSERT INTO runs (started, kind, target, status) VALUES (?,?,?,?)",
         (now_iso(), kind, target, "running"),

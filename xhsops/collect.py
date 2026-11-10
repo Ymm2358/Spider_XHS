@@ -7,7 +7,7 @@ import random
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from .adapters import build_pc_api, unwrap
 from .config import RAW_DIR, ensure_dirs
@@ -30,18 +30,28 @@ def collect_search(
     keyword: str,
     limit: int = 60,
     sort: int = 0,
+    note_time: int = 0,
     api=None,
     archive_raw: bool = True,
 ) -> list[dict]:
-    """按关键词采集笔记。sort: 0 综合 1 最新 2 最多点赞 3 最多评论 4 最多收藏。"""
+    """按关键词采集笔记。
+
+    sort: 0 综合 1 最新 2 最多点赞 3 最多评论 4 最多收藏
+    note_time: 0 不限 1 一天内 2 一周内 3 半年内
+    """
     api = api or build_pc_api()
-    data = unwrap(api.search_some_note(keyword, limit, sort_type_choice=sort))
+    data = unwrap(
+        api.search_some_note(keyword, limit, sort_type_choice=sort, note_time=note_time)
+    )
     items = data if isinstance(data, list) else []
 
     if archive_raw:
-        archive(f"search_s{sort}", keyword, items)
+        archive(f"search_s{sort}t{note_time}", keyword, items)
 
-    notes = [note_from_item(item, keyword=keyword, source=f"search:s{sort}") for item in items]
+    notes = [
+        note_from_item(item, keyword=keyword, source=f"search:s{sort}t{note_time}")
+        for item in items
+    ]
     return [note for note in notes if note]
 
 
@@ -67,23 +77,32 @@ def collect_homefeed(limit: int = 60, api=None, archive_raw: bool = True) -> lis
     return [note for note in notes if note]
 
 
-def collect_keywords(
-    keywords: Iterable[str],
-    limit: int = 60,
-    sorts: tuple[int, ...] = (0,),
+def collect_profile(
+    keywords: Sequence[str],
+    profile: Sequence[dict],
     api=None,
     delay: tuple[float, float] = (2.0, 4.5),
 ) -> tuple[list[dict], list[str]]:
-    """批量采集多个关键词，关键词之间随机间隔，降低风控概率。"""
+    """按配置里的采集档位批量抓取。profile 每项形如
+    {sort: 0, note_time: 0, limit: 40}。
+    """
     api = api or build_pc_api()
     all_notes: list[dict] = []
     errors: list[str] = []
-    for index, keyword in enumerate(keywords):
-        for sort in sorts:
+    total = len(keywords) * len(profile)
+    done = 0
+    for keyword in keywords:
+        for spec in profile:
+            done += 1
+            sort = int(spec.get("sort", 0))
+            note_time = int(spec.get("note_time", 0))
+            limit = int(spec.get("limit", 40))
             try:
-                all_notes.extend(collect_search(keyword, limit=limit, sort=sort, api=api))
-            except Exception as exc:  # 单个关键词失败不影响整体
-                errors.append(f"{keyword} sort={sort}: {exc}")
-            if index < len(keywords) - 1 or sort != sorts[-1]:
+                all_notes.extend(
+                    collect_search(keyword, limit=limit, sort=sort, note_time=note_time, api=api)
+                )
+            except Exception as exc:  # 单个组合失败不影响整体
+                errors.append(f"{keyword} sort={sort} time={note_time}: {exc}")
+            if done < total:
                 time.sleep(random.uniform(*delay))
     return all_notes, errors
