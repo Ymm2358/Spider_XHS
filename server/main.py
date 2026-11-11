@@ -10,16 +10,28 @@ VENDOR = ROOT / "vendor" / "spider_xhs"
 if VENDOR.exists() and str(VENDOR) not in sys.path:
     sys.path.insert(0, str(VENDOR))
 
+from fastapi import FastAPI  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from server.engine.main import create_app  # noqa: E402
 
-app = create_app()
+app: FastAPI = create_app()
 
 # 前端构建产物存在时由后端托管，一个端口就能用。
 _dist = ROOT / "web" / "dist"
-if _dist.exists():
-    app.mount("/", StaticFiles(directory=str(_dist), html=True), name="web")
+if (_dist / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(_dist / "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str):
+        """SPA 回退：非 /api 路径都返回 index.html，交给前端路由。"""
+        if full_path.startswith("api/"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        candidate = _dist / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_dist / "index.html")
 
 
 def main() -> int:
