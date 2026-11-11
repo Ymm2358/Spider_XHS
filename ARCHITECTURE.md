@@ -68,12 +68,43 @@ xhs-ops/
 - 前端没有登录页
 - 验收：不带 token 直接调 `/api/accounts` 返回 200
 
-### P2 单库
+### P2 单库（已定：合并成一套）
 
-- 沿用它的 SQLAlchemy 模型和 alembic 迁移
-- 数据库固定 `data/xhs.db`（不要和现有 `xhsops` 的库混用，迁移时二选一）
-- 现有 `xhsops` 的 notes/snapshots 表可以并进去，也可以让插件数据只走 engine 的内容库；这一步做之前先确认字段映射
-- 验收：一次启动完成建表，账号、笔记、草稿三张表可读写
+**决定：以 engine 的 `notes` 表为准，扩展字段，历史数据从 `data/raw` 重放，不做 SQL 对拷。**
+
+原因：两边都有 `notes` 表但字段完全不同，SQLite 里同名表不能共存；而我们的原始响应都归档在 `data/raw/`，重放比写迁移脚本更可靠。
+
+字段映射（engine 现有 → 需要补的）：
+
+| 我们的字段 | engine 现状 | 处理 |
+|---|---|---|
+| `note_id` | 有 | 加唯一索引 `(platform, note_id)` |
+| `title` | 有 | 直接用 |
+| `desc` | `content` | 直接用 |
+| `author_id` | 无 | 新增 `author_id` |
+| `author_nick` | `author_name` | 直接用 |
+| `author_fans` | 无 | 新增 `author_fans` |
+| `liked/collected/comment/share` | 无 | 新增四个整数字段 |
+| `publish_ts` | 无 | 新增 `publish_ts`（epoch 秒） |
+| `publish_text` | 无 | 新增 `publish_text` |
+| `note_type` | 无 | 新增 |
+| `image_count` | 无 | 新增 |
+| `url` | 无 | 新增 |
+| `keyword` | 无 | 新增 |
+| `cover_url` | `note_assets` | 保留 assets，同时冗余一列方便列表页 |
+| `tags` | `note_tags` 关联 | 用关联表，不存 JSON |
+| `first_seen/last_seen` | `created_at` | 新增 `last_seen`，`first_seen` 用 `created_at` |
+| 快照 | 无 | 新增 `note_snapshots` 表（note_id, ts, liked, collected, comment, share） |
+
+执行顺序：
+
+1. 在 `server/engine/models/note.py` 加字段和 `NoteSnapshot` 模型
+2. 生成一个 alembic 迁移（新增列 + 唯一索引 + 新表）
+3. 写 `server/local/replay.py`：读 `data/raw/`，走 engine 的入库 service，不直接写 SQL
+4. 校验：重放后 `notes` 行数 ≥ 1675，随机抽 20 条对比 `liked/collected/comment` 与旧库一致
+5. 旧库 `data/xhs.db` 改名归档，不再写入
+
+注意：`xhsops/store.py` 目前是裸 sqlite3，P2 之后要么改成 SQLAlchemy 读 engine 的库，要么只保留只读查询。不要在同一个库里维护两套 notes。
 
 ### P3 前端外壳
 
