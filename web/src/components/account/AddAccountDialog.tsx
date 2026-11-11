@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import type { LoginSession } from "../../lib/types";
 
+type SubType = "pc" | "creator";
+
 const STATUS_TEXT: Record<string, string> = {
   pending: "等待扫码",
   scanned: "已扫码，请在手机上确认",
@@ -11,15 +13,42 @@ const STATUS_TEXT: Record<string, string> = {
   error: "登录失败，请刷新二维码重试"
 };
 
+const SUB_TYPE_TEXT: Record<SubType, { label: string; hint: string }> = {
+  pc: { label: "采集账号", hint: "搜索、看竞品、抓评论" },
+  creator: { label: "发布账号", hint: "发笔记、看自己的作品数据" }
+};
+
 type Props = {
   onDone: () => void;
 };
 
 export default function AddAccountDialog({ onDone }: Props) {
   const [tab, setTab] = useState<"qr" | "cookie">("qr");
+  const [subType, setSubType] = useState<SubType>("pc");
 
   return (
     <div>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {(Object.keys(SUB_TYPE_TEXT) as SubType[]).map((key) => {
+          const meta = SUB_TYPE_TEXT[key];
+          const active = subType === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSubType(key)}
+              className={[
+                "rounded-lg border px-3 py-2 text-left transition-colors",
+                active ? "border-accent/60 bg-accent-soft" : "border-line bg-bg hover:border-line"
+              ].join(" ")}
+            >
+              <div className="text-[12px] font-medium">{meta.label}</div>
+              <div className="mt-0.5 text-[10px] text-muted">{meta.hint}</div>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mb-4 flex gap-1 rounded-lg bg-bg p-1">
         {[
           { key: "qr", label: "扫码登录" },
@@ -39,12 +68,16 @@ export default function AddAccountDialog({ onDone }: Props) {
         ))}
       </div>
 
-      {tab === "qr" ? <QrLogin onDone={onDone} /> : <CookieImport onDone={onDone} />}
+      {tab === "qr" ? (
+        <QrLogin subType={subType} onDone={onDone} />
+      ) : (
+        <CookieImport subType={subType} onDone={onDone} />
+      )}
     </div>
   );
 }
 
-function QrLogin({ onDone }: Props) {
+function QrLogin({ subType, onDone }: Props & { subType: SubType }) {
   const [session, setSession] = useState<LoginSession | null>(null);
   const [status, setStatus] = useState("pending");
   const [message, setMessage] = useState("");
@@ -58,7 +91,7 @@ function QrLogin({ onDone }: Props) {
     setSession(null);
     setStatus("pending");
     try {
-      const res = await api.post<LoginSession>("/xhs/login-sessions/pc/qrcode", { sync_creator: false });
+      const res = await api.post<LoginSession>(`/xhs/login-sessions/${subType}/qrcode`, {});
       setSession(res);
       setStatus(res.status || "pending");
     } catch (err) {
@@ -66,7 +99,7 @@ function QrLogin({ onDone }: Props) {
     } finally {
       setStarting(false);
     }
-  }, []);
+  }, [subType]);
 
   useEffect(() => {
     void start();
@@ -103,12 +136,9 @@ function QrLogin({ onDone }: Props) {
         )}
       </div>
 
-      <div className="text-center text-[12px] text-muted">
-        {STATUS_TEXT[status] ?? status}
-      </div>
+      <div className="text-center text-[12px] text-muted">{STATUS_TEXT[status] ?? status}</div>
 
       {message && <div className="text-center text-[11px] leading-5 text-muted">{message}</div>}
-
       {error && <div className="text-center text-[12px] text-red-400">{error}</div>}
 
       <button
@@ -126,9 +156,8 @@ function QrLogin({ onDone }: Props) {
   );
 }
 
-function CookieImport({ onDone }: Props) {
+function CookieImport({ subType, onDone }: Props & { subType: SubType }) {
   const [cookie, setCookie] = useState("");
-  const [syncCreator, setSyncCreator] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -138,9 +167,9 @@ function CookieImport({ onDone }: Props) {
     try {
       await api.post("/accounts/import-cookie", {
         platform: "xhs",
-        sub_type: "pc",
+        sub_type: subType,
         cookie_string: cookie.trim(),
-        sync_creator: syncCreator
+        sync_creator: false
       });
       onDone();
     } catch (err) {
@@ -161,16 +190,6 @@ function CookieImport({ onDone }: Props) {
         className="w-full resize-none rounded-lg border border-line bg-bg px-3 py-2 text-[12px] text-ink outline-none placeholder:text-muted focus:border-accent/60"
       />
 
-      <label className="flex items-center gap-2 text-[12px] text-muted">
-        <input
-          type="checkbox"
-          checked={syncCreator}
-          onChange={(event) => setSyncCreator(event.target.checked)}
-          className="h-3.5 w-3.5 accent-[var(--color-accent)]"
-        />
-        同时同步创作者平台（发布用）
-      </label>
-
       {error && <div className="text-[12px] text-red-400">{error}</div>}
 
       <button
@@ -181,6 +200,12 @@ function CookieImport({ onDone }: Props) {
       >
         {busy ? "验证中…" : "导入"}
       </button>
+
+      {subType === "creator" && (
+        <p className="text-[11px] leading-5 text-muted">
+          创作者平台的 Cookie 需要先登录 customer.xiaohongshu.com，直接粘 PC 端的 Cookie 可能验证不过。
+        </p>
+      )}
     </div>
   );
 }

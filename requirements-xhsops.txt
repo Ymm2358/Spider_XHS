@@ -2,3 +2,6 @@
 PyYAML>=6.0
 # 上游 2026-10 的 webSsk 链路用到，但 requirements.txt 漏了，补上。
 cryptography>=42
+# 上游锁定 0.15.0，但创作者平台登录要求 chrome150 指纹，0.15 不支持，
+# 会在生成二维码时直接报 "Impersonating chrome150 is not supported"。
+curl_cffi>=0.17
