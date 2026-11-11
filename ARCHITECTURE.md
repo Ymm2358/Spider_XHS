@@ -145,6 +145,7 @@ engine 的接口保持原样，路径不变（`/api/accounts`、`/api/xhs/...`�
 ## 已知风险
 
 - **它的签名层已过期**：必须用 `vendor/spider_xhs`，不要用仓库自带的 `apis/`。
+- **vendor 有本地补丁**：`patches/0001-qr-login-code-status.patch` 修二维码登录确认后卡住。同步上游时脚本会自动重放；补丁打不上说明上游改了同一段，要人工核对。
 - **它没有 LICENSE 文件**，README 写 MIT 但仓库里没有。自己用没问题，不要分发。
 - **它的迁移脚本和模型耦合**：搬过来时先跑一次空库迁移，确认 alembic 链完整。
 - **`XHS_ALL_IN_ONE` 最后提交是 2026-08**：上游 SDK 更新后，它的适配层可能需要跟着改，改动集中在 `server/engine/adapters/xhs/`。

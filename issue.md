@@ -16,7 +16,18 @@
 
 它的 OpenAPI 声明是 OAuth2 密码模式（表单提交），但 `/api/auth/login` 只收 JSON。Swagger 的 Authorize 弹窗必然失败。不影响我们自己写前端，因为 P1 会把认证整个去掉。
 
-### 4. 临时文件待清理
+### 4. 二维码登录在确认后卡住（已定位，未彻底解决）
+
+上游 `_login_by_qrcode_status` 在手机确认后请求 `/api/sns/web/v1/login/qrcode/status`，返回 `success=true` 但 `data={}`，拿不到 `login_info.session`，直接抛错，前端轮询静默失败。
+
+已做：
+- 兼容 `codeStatus` 命名，并在 Set-Cookie 已换 `web_session` 时视为成功
+- 适配层捕获异常返回 `status=error`，前端显示具体原因
+- 补丁存到 `patches/0001-qr-login-code-status.patch`，同步上游时自动重放
+
+未解决：如果响应确实没有登录态，二维码这条路仍然走不通。当前建议用 **Cookie 导入**。
+
+### 5. 临时文件待清理
 
 `data/tmp/xhs-all-in-one/` 是验证用的克隆，`data/tmp` 下还有测试账号和库。确认迁移方案后删除。
 

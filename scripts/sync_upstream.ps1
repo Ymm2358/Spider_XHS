@@ -60,6 +60,19 @@ try {
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     Set-Content -Path (Join-Path $vendor "UPSTREAM_COMMIT") -Value $head -Encoding utf8
 
+    $patchDir = Join-Path $root "patches"
+    if (Test-Path $patchDir) {
+        Get-ChildItem $patchDir -Filter *.patch | Sort-Object Name | ForEach-Object {
+            git apply --check $_.FullName 2>&1 | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "补丁打不上：$($_.Name)。上游可能已经改了同一段，先人工核对。"
+                exit 4
+            }
+            git apply $_.FullName
+            Write-Host "已应用补丁：$($_.Name)"
+        }
+    }
+
     Write-Host "安装上游 Node 依赖..."
     Push-Location $vendor
     npm install --no-audit --no-fund 2>&1 | Select-Object -Last 3 | Out-Host
