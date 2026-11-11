@@ -13,42 +13,18 @@ const STATUS_TEXT: Record<string, string> = {
   error: "登录失败，请刷新二维码重试"
 };
 
-const SUB_TYPE_TEXT: Record<SubType, { label: string; hint: string }> = {
-  pc: { label: "采集账号", hint: "搜索、看竞品、抓评论" },
-  creator: { label: "发布账号", hint: "发笔记、看自己的作品数据" }
-};
-
 type Props = {
   onDone: () => void;
 };
 
 export default function AddAccountDialog({ onDone }: Props) {
   const [tab, setTab] = useState<"qr" | "cookie">("qr");
-  const [subType, setSubType] = useState<SubType>("pc");
+  // 发布账号暂时关闭：创作者二维码会授权到千帆，Cookie 导入缺 CAS/DS，
+  // 而且设备指纹 Windows/macOS 不一致。发布先手工，等小号验证通过再开。
+  const subType: SubType = "pc";
 
   return (
     <div>
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        {(Object.keys(SUB_TYPE_TEXT) as SubType[]).map((key) => {
-          const meta = SUB_TYPE_TEXT[key];
-          const active = subType === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setSubType(key)}
-              className={[
-                "rounded-lg border px-3 py-2 text-left transition-colors",
-                active ? "border-accent/60 bg-accent-soft" : "border-line bg-bg hover:border-line"
-              ].join(" ")}
-            >
-              <div className="text-[12px] font-medium">{meta.label}</div>
-              <div className="mt-0.5 text-[10px] text-muted">{meta.hint}</div>
-            </button>
-          );
-        })}
-      </div>
-
       <div className="mb-4 flex gap-1 rounded-lg bg-bg p-1">
         {[
           { key: "qr", label: "扫码登录" },

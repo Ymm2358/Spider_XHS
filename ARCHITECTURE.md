@@ -16,6 +16,7 @@
 | 签名层 | 用本项目的 `vendor/spider_xhs` | 上游 2026-10-22 版，能过当前风控；它自带的 8 月版会 461/406 |
 | 前端 | **React 19 + Vite + Tailwind**，自建组件 | 完全控制视觉，不用 Ant Design |
 | 认证 | **去掉**，本地固定单用户 | 它的 OAuth2 声明和 JSON 接口不匹配，登录窗本来就进不去 |
+| 发布 | **暂停**，发布账号入口关闭 | 创作者二维码授权到千帆，Cookie 导入缺 CAS/DS，指纹 Windows/macOS 不一致；发布先手工 |
 | 进程 | 单进程、单端口、单 SQLite | 不要 8000 + 8787 两个服务 |
 | 图表 | Recharts 或 ECharts | 都行，跟着 React 走 |
 | 打包 | FastAPI 托管前端构建产物 + `start.bat` | 双击启动，不装服务 |
@@ -151,23 +152,44 @@ engine 的接口保持原样，路径不变（`/api/accounts`、`/api/xhs/...`�
 - **`XHS_ALL_IN_ONE` 最后提交是 2026-08**：上游 SDK 更新后，它的适配层可能需要跟着改，改动集中在 `server/engine/adapters/xhs/`。
 - **Cookie 会过期**：`xhsops login` 扫码续期，engine 的账号健康检查也要能提示。
 
-## 当前进度（2026-11-11）
+## 当前进度（2026-11-12）
 
 已完成：
 
-- **P0 搬后端**：`server/engine` 已就位，`python -m server.main` 启动成功，`/api/health` 返回 ok，alembic 迁移在 `data/engine.db` 跑完
-- **P1 去认证**：`get_current_user` 改成本地固定用户，`/api/accounts` 不带 token 返回 200
-- **P3 前端外壳**：`web/` 已建，7 个路由，侧边栏 + 页面容器，`npm run build` 通过，构建产物由后端托管，SPA 路由可直达
+- **P0 搬后端**：`server/engine` 已就位，`python -m server.main` 启动成功，`/api/health` 返回 ok
+- **P1 去认证**：本地固定用户，接口不需要 token
+- **P3 前端外壳**：`web/` 七个路由，构建产物由后端托管
+- **账号页**：列表、Cookie 导入、扫码（PC）、检查状态、删除；已绑定采集号「不吃月饼饼」（id=1，active）
 - `xhsops` 数据层：采集、指标、日报、PDF/PNG、扫码登录、插件接收服务
-- `vendor/spider_xhs`：上游 2026-10-22 版，doctor 可用（Cookie 过期时停在登录态）
-- 浏览器插件：被动采集、限流、白名单、断线队列
+- `vendor/spider_xhs`：上游 2026-10-22 版，`curl_cffi` 升到 0.17 以支持创作者指纹
 
-未开始：
+未完成 / 暂停：
 
-- P2 单库合并（字段映射已写在上面的 P2 小节）
-- P3 前端外壳
-- P4 六个页面
-- P5 打包
+- **P2 单库合并**：字段映射已定，历史数据从 `data/raw` 重放
+- **P4 其余页面**：采集、内容库、写稿、发布、概览
+- **发布账号**：暂停，入口已关闭，等小号验证
+
+## 当前账号
+
+| 账号 | id | 类型 | 状态 | 用途 |
+|---|---|---|---|---|
+| 不吃月饼饼 | 1 | pc | active | 采集、搜索、看数据 |
+
+主号「木木做的了主」不在工具里跑采集，避免风控影响。发布走手工。
+
+## 下一步（新 session 从这里开始）
+
+1. 用账号 1 跑一次真实采集：`POST /api/xhs/crawl/search-notes`，确认能入库
+2. 做「内容库」页：接 `GET /api/notes`，卡片/列表
+3. 做「采集」页：关键词输入、任务进度、结果入库
+4. 最后再做 P2 单库合并（现在两个库并存，engine 用 `data/engine.db`，xhsops 用 `data/xhs.db`）
+
+## 启动方式
+
+```
+.venv\Scripts\python -m server.main        # 后端 + 已构建前端，http://127.0.0.1:8000
+cd web && npm run dev                      # 前端热更新，http://127.0.0.1:5173
+```
 
 ## 临时文件
 

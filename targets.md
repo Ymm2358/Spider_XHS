@@ -16,7 +16,7 @@
 | P1 | 去认证：本地固定用户，删掉登录页 | 完成 |
 | P2 | 单库：合并 notes 表，从 raw 重放历史数据 | 未开始 |
 | P3 | 前端外壳：React + Vite + Tailwind，路由和布局 | 完成 |
-| P4 | 六个页面：账号、采集、内容库、写稿、发布、概览 | 未开始 |
+| P4 | 页面：账号（完成）、采集、内容库、写稿、概览 | 进行中 |
 | P5 | 打包：单进程托管前端 + `start.bat` | 未开始 |
 
 已完成的基础（在 P0 之前就已经能跑）：
@@ -29,17 +29,18 @@
 
 # 当前进度
 
-- 验证过 `XHS_ALL_IN_ONE` 后端能用我们的签名层启动，111 个接口，JWT 注册登录可用
-- 前端技术栈已定：React 19 + Vite + Tailwind，不用 Ant Design
-- 当前阻塞：`.env` 里的 Cookie 已过期，脚本采集不可用；插件采集不受影响
+- 后端已接入，去掉了认证，`/api/health` 和 `/api/accounts` 可用
+- 前端外壳完成，账号页已接真实接口
+- 采集号「不吃月饼饼」（id=1）已绑定，状态 active
+- 发布账号暂停：创作者二维码授权到千帆，Cookie 导入缺 CAS/DS，先手工发布
 
 # 当前目标
 
-从 P0 开始：把后端搬进 `server/engine`，改导入前缀，替换签名层，确认 `/api/health` 能起。
+用账号 1 跑一次真实采集（`POST /api/xhs/crawl/search-notes`），确认入库，然后做内容库页。
 
 # 已知取舍
 
-- 上游文件一律放 `vendor/spider_xhs/`，不手改，用 `scripts/sync_upstream.ps1` 整层替换
-- 主号只做被动采集，主动采集留给小号
+- 上游文件一律放 `vendor/spider_xhs/`，不手改，用 `scripts/sync_upstream.ps1` 整层替换，补丁放 `patches/`
+- 主号不参与工具内采集，避免风控；发布手工
 - 小红书不挂代理；GitHub 需要代理，两者分开
 - 自己的代码在 `xhsops/`、`server/`、`web/`、`extension/`，永远不碰 vendor

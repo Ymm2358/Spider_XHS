@@ -84,7 +84,7 @@ export default function Accounts() {
   return (
     <Page
       title="账号"
-      description="采集账号和发布账号可以分开绑定。采集建议用小号，发布用主号的创作者平台。"
+      description="采集账号用 Cookie 导入或扫码绑定。发布账号暂未开放，发布先手工完成。"
       actions={
         <button
           type="button"
