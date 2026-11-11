@@ -23,17 +23,21 @@ class XhsPcLoginAdapter:
         }
 
     def check_qrcode_status(self, qr_id: str, code: str, cookies: dict[str, Any]) -> dict[str, Any]:
-        with direct_xhs_request_env():
-            from apis.xhs_pc_login_apis import XHSLoginApi
+        try:
+            with direct_xhs_request_env():
+                from apis.xhs_pc_login_apis import XHSLoginApi
 
-            api = XHSLoginApi()
-            success, message, updated_cookies = api.check_qrcode_status(qr_id, code, cookies)
+                api = XHSLoginApi()
+                success, message, updated_cookies = api.check_qrcode_status(qr_id, code, cookies)
+        except Exception as exc:  # 上游在“已确认但拿不到登录态”时会抛错，不能让它变成 500
+            return {"status": "error", "message": str(exc), "cookies": cookies}
+
         status = "confirmed" if success else "pending"
         if "过期" in message or "expired" in message.lower():
             status = "expired"
         if "确认" in message or "confirm" in message.lower():
             status = "scanned"
-        return {"status": status, "cookies": updated_cookies}
+        return {"status": status, "message": message, "cookies": updated_cookies}
 
     def get_user_info(self, cookies: dict[str, Any]) -> dict[str, Any]:
         with direct_xhs_request_env():

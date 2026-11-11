@@ -263,6 +263,7 @@ def login_session(
     return {
         "session_id": session.id,
         "status": session.status,
+        "message": result.get("message", ""),
         "qr_url": session.qr_url,
         "account": account_payload,
         "creator_account": creator_account_payload,

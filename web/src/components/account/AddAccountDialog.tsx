@@ -7,7 +7,8 @@ const STATUS_TEXT: Record<string, string> = {
   pending: "等待扫码",
   scanned: "已扫码，请在手机上确认",
   confirmed: "已确认，正在写入账号",
-  expired: "二维码已过期，请刷新"
+  expired: "二维码已过期，请刷新",
+  error: "登录失败，请刷新二维码重试"
 };
 
 type Props = {
@@ -46,12 +47,14 @@ export default function AddAccountDialog({ onDone }: Props) {
 function QrLogin({ onDone }: Props) {
   const [session, setSession] = useState<LoginSession | null>(null);
   const [status, setStatus] = useState("pending");
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
 
   const start = useCallback(async () => {
     setStarting(true);
     setError("");
+    setMessage("");
     setSession(null);
     setStatus("pending");
     try {
@@ -70,16 +73,17 @@ function QrLogin({ onDone }: Props) {
   }, [start]);
 
   useEffect(() => {
-    if (!session || status === "confirmed" || status === "expired") return;
+    if (!session || status === "confirmed" || status === "expired" || status === "error") return;
     const timer = window.setInterval(async () => {
       try {
         const res = await api.get<LoginSession>(`/xhs/login-sessions/${session.session_id}`);
         setStatus(res.status);
+        if (res.message) setMessage(res.message);
         if (res.status === "confirmed") {
           window.clearInterval(timer);
           onDone();
         }
-        if (res.status === "expired") {
+        if (res.status === "expired" || res.status === "error") {
           window.clearInterval(timer);
         }
       } catch {
@@ -102,6 +106,8 @@ function QrLogin({ onDone }: Props) {
       <div className="text-center text-[12px] text-muted">
         {STATUS_TEXT[status] ?? status}
       </div>
+
+      {message && <div className="text-center text-[11px] leading-5 text-muted">{message}</div>}
 
       {error && <div className="text-center text-[12px] text-red-400">{error}</div>}
 

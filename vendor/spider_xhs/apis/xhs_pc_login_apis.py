@@ -707,19 +707,22 @@ class XHSLoginApi:
 
         res = resp.json()
         data = res.get('data') or {}
-        if not res.get('success') or data.get('code_status') != 2:
-            raise RuntimeError(res.get('msg') or '二维码最终登录状态无效')
+        code_status = data.get('code_status', data.get('codeStatus'))
         login_info = data.get('login_info') or {}
         session = str(login_info.get('session') or '')
+        current_session = str(cookies.get('web_session') or '')
+        session_changed = bool(current_session and current_session != visitor_session)
         if session:
-            # Replace the anonymous session even when Set-Cookie parsing is
-            # unavailable.  Keeping the visitor session would produce a false
-            # login success.
             cookies.pop('web_session', None)
             cookies['web_session'] = session
             self.profile.update_cookies(cookies)
-        elif not cookies.get('web_session') or cookies.get('web_session') == visitor_session:
-            raise RuntimeError('二维码登录响应缺少正式 web_session')
+        elif session_changed:
+            # 服务端已经通过 Set-Cookie 下发登录态，直接沿用。
+            pass
+        elif not res.get('success') or code_status not in (None, 2):
+            raise RuntimeError(res.get('msg') or '二维码最终登录状态无效')
+        else:
+            raise RuntimeError('二维码已确认，但响应里没有登录态，请刷新二维码重试')
 
         # 浏览器把解密后的 32 字节 ssk 存 localStorage['webSsk']，格式
         # {"xhs-pc-web":"<44 字符 base64>"}。服务器公钥暂用 App 9.43.1 的
