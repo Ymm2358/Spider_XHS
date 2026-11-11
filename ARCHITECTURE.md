@@ -156,6 +156,7 @@ engine 的接口保持原样，路径不变（`/api/accounts`、`/api/xhs/...`�
 
 - **P0 搬后端**：`server/engine` 已就位，`python -m server.main` 启动成功，`/api/health` 返回 ok，alembic 迁移在 `data/engine.db` 跑完
 - **P1 去认证**：`get_current_user` 改成本地固定用户，`/api/accounts` 不带 token 返回 200
+- **P3 前端外壳**：`web/` 已建，7 个路由，侧边栏 + 页面容器，`npm run build` 通过，构建产物由后端托管，SPA 路由可直达
 - `xhsops` 数据层：采集、指标、日报、PDF/PNG、扫码登录、插件接收服务
 - `vendor/spider_xhs`：上游 2026-10-22 版，doctor 可用（Cookie 过期时停在登录态）
 - 浏览器插件：被动采集、限流、白名单、断线队列
