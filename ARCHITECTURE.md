@@ -154,16 +154,18 @@ engine 的接口保持原样，路径不变（`/api/accounts`、`/api/xhs/...`�
 
 已完成：
 
+- **P0 搬后端**：`server/engine` 已就位，`python -m server.main` 启动成功，`/api/health` 返回 ok，alembic 迁移在 `data/engine.db` 跑完
+- **P1 去认证**：`get_current_user` 改成本地固定用户，`/api/accounts` 不带 token 返回 200
 - `xhsops` 数据层：采集、指标、日报、PDF/PNG、扫码登录、插件接收服务
 - `vendor/spider_xhs`：上游 2026-10-22 版，doctor 可用（Cookie 过期时停在登录态）
 - 浏览器插件：被动采集、限流、白名单、断线队列
-- 验证过 `XHS_ALL_IN_ONE` 后端可以用我们的签名层启动，111 个接口，JWT 注册登录可用
 
 未开始：
 
-- P0 搬后端
-- P1 去认证
+- P2 单库合并（字段映射已写在上面的 P2 小节）
 - P3 前端外壳
+- P4 六个页面
+- P5 打包
 
 ## 临时文件
 
