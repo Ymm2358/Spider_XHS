@@ -1,5 +1,25 @@
 # 当前问题
 
+## 当前阻塞（2026-11-11）
+
+### 1. Cookie 已过期
+
+`.env` 里的 `XHS_PC_COOKIE` 失效，`doctor` 停在 `登录已过期`。影响脚本采集、补粉丝数、定时任务；浏览器插件不受影响，它用浏览器自己的会话。
+
+处理：`.venv\Scripts\python -m xhsops login` 扫码，自动写回 `.env`。
+
+### 2. 方向调整，P0 还没开始
+
+决定复用 `XHS_ALL_IN_ONE` 的后端，自建前端。详见 `ARCHITECTURE.md`。当前卡在 P0：把它的 `backend/app` 搬成 `server/engine`。
+
+### 3. `XHS_ALL_IN_ONE` 的 Swagger 登录不可用
+
+它的 OpenAPI 声明是 OAuth2 密码模式（表单提交），但 `/api/auth/login` 只收 JSON。Swagger 的 Authorize 弹窗必然失败。不影响我们自己写前端，因为 P1 会把认证整个去掉。
+
+### 4. 临时文件待清理
+
+`data/tmp/xhs-all-in-one/` 是验证用的克隆，`data/tmp` 下还有测试账号和库。确认迁移方案后删除。
+
 ## 阻塞
 
 ### 1. 作者粉丝数受风控影响，只能低频补
